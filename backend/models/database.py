@@ -11,7 +11,7 @@ class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(30))
+    name: Mapped[str] = mapped_column(String(100))
     
     # Relationship to messages
     messages: Mapped[list["Message"]] = relationship(back_populates="user")
