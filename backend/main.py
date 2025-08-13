@@ -98,7 +98,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 async with session.begin():
                     user_msg = Message(role="user", content=text)
                     session.add(user_msg)
-                await session.commit()
+                # Transaction committed on exiting session.begin()
 
             bot_text = _generate_bot_reply()
 
@@ -106,15 +106,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 async with session.begin():
                     bot_msg = Message(role="bot", content=bot_text)
                     session.add(bot_msg)
-                await session.commit()
+                    # Ensure PK and server defaults (e.g., created_at) are loaded before session closes
+                    await session.flush()
+                    await session.refresh(bot_msg)
 
-            await websocket.send_json(
-                {
-                    "id": bot_msg.id,
-                    "role": bot_msg.role,
-                    "content": bot_msg.content,
-                    "created_at": bot_msg.created_at.isoformat() if hasattr(bot_msg.created_at, "isoformat") and bot_msg.created_at else "",
-                }
-            )
+                    response_payload = {
+                        "id": bot_msg.id,
+                        "role": bot_msg.role,
+                        "content": bot_msg.content,
+                        "created_at": bot_msg.created_at.isoformat() if hasattr(bot_msg.created_at, "isoformat") and bot_msg.created_at else "",
+                    }
+
+            await websocket.send_json(response_payload)
     except WebSocketDisconnect:
         return
