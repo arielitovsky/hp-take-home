@@ -2,17 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "./user-context";
-
-type Message = {
-  id?: number;
-  role: "user" | "bot";
-  content: string;
-  user_id: number;
-  created_at?: string;
-};
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+import { 
+  Message, 
+  connectWs, 
+  fetchUser, 
+  fetchMessages, 
+  handleSend, 
+  handleCancel 
+} from "./data";
 
 export default function Home() {
   const { user, setUser, isLoading, setIsLoading } = useUser();
@@ -20,86 +17,35 @@ export default function Home() {
   const [input, setInput] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
 
-  const connectWs = useMemo(() => {
-    return () => {
-      if (!user) return; // Don't connect until we have user info
-      
-      const ws = new WebSocket(`${wsUrl}/ws`);
-      ws.onmessage = (event) => {
-        try {
-          const msg: Message = JSON.parse(event.data);
-          setMessages((prev) => [...prev, msg]);
-        } catch {
-          // ignore
-        }
-      };
-      wsRef.current = ws;
-    };
+  const connectWsMemo = useMemo(() => {
+    return () => connectWs(user, setMessages, wsRef);
   }, [user]);
 
   useEffect(() => {
     // Fetch user info first
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${apiUrl}/users/me`, { cache: "no-store" });
-        if (res.ok) {
-          const userData = await res.json();
-          setUser(userData);
-        } else {
-          console.error("Failed to fetch user");
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [apiUrl, setUser, setIsLoading]);
+    fetchUser(setUser, setIsLoading);
+  }, [setUser, setIsLoading]);
 
   useEffect(() => {
     if (!user) return; // Don't proceed until we have user info
 
     // fetch initial messages
-    const fetchMessages = async () => {
-      if (!apiUrl) return;
-      const res = await fetch(`${apiUrl}/messages`, { cache: "no-store" });
-      const data: Message[] = await res.json();
-      setMessages(data);
-    };
-    fetchMessages();
+    fetchMessages(setMessages);
 
     // connect websocket
-    connectWs();
+    connectWsMemo();
 
     return () => {
       wsRef.current?.close();
     };
-  }, [connectWs, user]);
+  }, [connectWsMemo, user]);
 
-  const handleSend = () => {
-    if (!input.trim() || !user) return;
-    
-    // optimistically add user message
-    const newMsg: Message = { 
-      role: "user", 
-      content: input, 
-      user_id: user.id 
-    };
-    setMessages((prev) => [...prev, newMsg]);
-    
-    // Send message with user ID to backend
-    const messagePayload = {
-      content: input,
-      user_id: user.id
-    };
-    wsRef.current?.send(JSON.stringify(messagePayload));
-    setInput("");
+  const onSend = () => {
+    handleSend(input, user, setMessages, wsRef, setInput);
   };
 
-  const handleCancel = () => {
-    setInput("");
+  const onCancel = () => {
+    handleCancel(setInput);
   };
 
   if (isLoading) {
@@ -148,13 +94,13 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleSend();
+              if (e.key === "Enter") onSend();
             }}
           />
-          <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={handleSend}>
+          <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={onSend}>
             Send
           </button>
-          <button className="px-4 py-2 rounded bg-gray-200" onClick={handleCancel}>
+          <button className="px-4 py-2 rounded bg-gray-200" onClick={onCancel}>
             Cancel
           </button>
         </div>
