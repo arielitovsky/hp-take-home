@@ -1,14 +1,24 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import select
 from seed import seed_user_if_needed
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_engine import engine
-from models import User
+from models import User, Message
+import random
 
 seed_user_if_needed()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class UserRead(BaseModel):
@@ -27,3 +37,84 @@ async def get_my_user():
             if user is None:
                 raise HTTPException(status_code=404, detail="User not found")
             return UserRead(id=user.id, name=user.name)
+
+
+class MessageRead(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: str
+
+
+@app.get("/messages")
+async def get_messages():
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            result = await session.execute(select(Message).order_by(Message.created_at.asc()))
+            messages = result.scalars().all()
+            return [
+                MessageRead(
+                    id=m.id,
+                    role=m.role,
+                    content=m.content,
+                    created_at=m.created_at.isoformat() if hasattr(m.created_at, "isoformat") and m.created_at else "",
+                )
+                for m in messages
+            ]
+
+
+def _generate_bot_reply() -> str:
+    words = [
+        "lorem",
+        "ipsum",
+        "dolor",
+        "sit",
+        "amet",
+        "consectetur",
+        "adipiscing",
+        "elit",
+        "sed",
+        "do",
+        "eiusmod",
+        "tempor",
+        "incididunt",
+        "ut",
+        "labore",
+        "et",
+        "dolore",
+        "magna",
+        "aliqua",
+    ]
+    return " ".join(random.choice(words) for _ in range(8)).capitalize() + "."
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            text = await websocket.receive_text()
+            async with AsyncSession(engine) as session:
+                async with session.begin():
+                    user_msg = Message(role="user", content=text)
+                    session.add(user_msg)
+                await session.commit()
+
+            bot_text = _generate_bot_reply()
+
+            async with AsyncSession(engine) as session:
+                async with session.begin():
+                    bot_msg = Message(role="bot", content=bot_text)
+                    session.add(bot_msg)
+                await session.commit()
+
+            await websocket.send_json(
+                {
+                    "id": bot_msg.id,
+                    "role": bot_msg.role,
+                    "content": bot_msg.content,
+                    "created_at": bot_msg.created_at.isoformat() if hasattr(bot_msg.created_at, "isoformat") and bot_msg.created_at else "",
+                }
+            )
+    except WebSocketDisconnect:
+        return
