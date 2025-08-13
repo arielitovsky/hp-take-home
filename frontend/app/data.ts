@@ -11,7 +11,7 @@ export type Message = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 
-export const connectWs = (
+export const connectWebsocket = (
   user: any,
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
   wsRef: React.MutableRefObject<WebSocket | null>
@@ -24,7 +24,7 @@ export const connectWs = (
       const msg: Message = JSON.parse(event.data);
       setMessages((prev) => [...prev, msg]);
     } catch {
-      // ignore
+      console.error("Failed to parse message:", event.data);
     }
   };
   wsRef.current = ws;

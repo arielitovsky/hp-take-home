@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "./user-context";
 import { 
   Message, 
-  connectWs, 
+  connectWebsocket, 
   fetchUser, 
   fetchMessages, 
   handleSend, 
@@ -17,8 +17,8 @@ export default function Home() {
   const [input, setInput] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
 
-  const connectWsMemo = useMemo(() => {
-    return () => connectWs(user, setMessages, wsRef);
+  const connectWebsocketMemo = useMemo(() => {
+    return () => connectWebsocket(user, setMessages, wsRef);
   }, [user]);
 
   useEffect(() => {
@@ -33,12 +33,12 @@ export default function Home() {
     fetchMessages(setMessages);
 
     // connect websocket
-    connectWsMemo();
+    connectWebsocketMemo();
 
     return () => {
       wsRef.current?.close();
     };
-  }, [connectWsMemo, user]);
+  }, [connectWebsocketMemo, user]);
 
   const onSend = () => {
     handleSend(input, user, setMessages, wsRef, setInput);
