@@ -7,6 +7,7 @@ from db_engine import engine
 from models import User, Message, UserRead, MessageRead
 from utils import generate_bot_reply
 import json
+import random
 
 seed_user_if_needed()
 
@@ -25,8 +26,9 @@ app.add_middleware(
 async def get_my_user():
     async with AsyncSession(engine) as session:
         async with session.begin():
-            # Get a random user from the database (in a real app, this would be based on authentication)
-            result = await session.execute(select(User).where(User.name == "Alice"))
+            # Randomly choose between Alice and Arie
+            random_name = random.choice(["Alice", "Arie"])
+            result = await session.execute(select(User).where(User.name == random_name))
             user = result.scalar_one()
 
             if user is None:
@@ -62,8 +64,8 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             text = await websocket.receive_text()
             
-            # Parse the message as JSON (required format)
             try:
+                # Parse the message the user submitted through the websocket
                 parsed = json.loads(text)
                 content = parsed.get("content")
                 user_id = parsed.get("user_id")
@@ -96,12 +98,18 @@ async def websocket_endpoint(websocket: WebSocket):
             async with AsyncSession(engine) as session:
                 async with session.begin():
                     # Get the Bot user for bot messages
-                    bot_user = await session.execute(select(User).where(User.name == "Bot"))
-                    bot_user = bot_user.scalar_one()
+                    result = await session.execute(select(User).where(User.name == "Bot"))
+                    bot_user = result.scalar_one()
                     bot_msg = Message(role="bot", content=bot_text, user_id=bot_user.id)
                     session.add(bot_msg)
-                    # Ensure PK and server defaults (e.g., created_at) are loaded before session closes
+                    
+                    # Flush the INSERT statement to the database to get the auto-generated primary key (id)
+                    # This executes the SQL but doesn't commit the transaction yet
                     await session.flush()
+                    
+                    # Refresh the object from the database to populate server-generated fields
+                    # like created_at (if it has a default value) and ensure all fields are available
+                    # for the response payload below
                     await session.refresh(bot_msg)
 
                     response_payload = {

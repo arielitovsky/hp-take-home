@@ -14,5 +14,6 @@ def seed_user_if_needed():
                 return
             print("Seeding users")
             session.add(User(name="Alice"))
+            session.add(User(name="Arie"))
             session.add(User(name="Bot"))
             session.commit()

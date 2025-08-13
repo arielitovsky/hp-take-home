@@ -21,7 +21,11 @@ export default function Home() {
     return () => connectWebsocket(user, setMessages, wsRef);
   }, [user]);
 
+  let fetching = false;
   useEffect(() => {
+    if (fetching) return;
+    
+    fetching = true;
     // Fetch user info first
     fetchUser(setUser, setIsLoading);
   }, [setUser, setIsLoading]);
