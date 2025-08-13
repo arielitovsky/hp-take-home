@@ -32,3 +32,19 @@ To override, create `frontend/.env.local`:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_WS_URL=ws://localhost:8000
 ```
+
+### Database Reset Script
+
+The `backend/reset_db.py` script is a utility for completely resetting the database when you need to:
+
+- **Apply schema changes**: After modifying database models
+- **Clear all data**: Start with a fresh database
+- **Fix database issues**: Resolve corruption or migration problems
+
+**⚠️ Warning**: This script will **permanently delete all data** in your database.
+
+**Usage**:
+```bash
+cd backend
+poetry run python reset_db.py
+```
