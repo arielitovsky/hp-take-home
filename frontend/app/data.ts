@@ -4,7 +4,8 @@ export type Message = {
   id?: number;
   role: "user" | "bot";
   content: string;
-  user_id: number;
+  origin_user: number,
+  destination_user: number,
   created_at?: string;
 };
 
