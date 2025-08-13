@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, func
 from seed import seed_user_if_needed
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_engine import engine
 from models import User, Message, UserRead, MessageRead
 from utils import generate_bot_reply
+import json
 
 seed_user_if_needed()
 
@@ -24,9 +25,9 @@ app.add_middleware(
 async def get_my_user():
     async with AsyncSession(engine) as session:
         async with session.begin():
-            # Sample logic to simplify getting the current user. There's only one user.
-            result = await session.execute(select(User))
-            user = result.scalars().first()
+            # Get a random user from the database (in a real app, this would be based on authentication)
+            result = await session.execute(select(User).where(User.name == "Alice"))
+            user = result.scalar_one()
 
             if user is None:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -60,12 +61,33 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             text = await websocket.receive_text()
+            
+            # Parse the message as JSON (required format)
+            try:
+                parsed = json.loads(text)
+                content = parsed.get("content")
+                user_id = parsed.get("user_id")
+                
+                if not user_id:
+                    raise HTTPException(status_code=400, detail="user_id is required in message payload")
+                
+                if not content:
+                    raise HTTPException(status_code=400, detail="content is required in message payload")
+                    
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Message must be valid JSON with 'content' and 'user_id' fields")
+            
             async with AsyncSession(engine) as session:
                 async with session.begin():
-                    # Get the first user (Alice) for user messages
-                    user = await session.execute(select(User).where(User.name == "Alice"))
-                    user = user.scalar_one()
-                    user_msg = Message(role="user", content=text, user_id=user.id)
+                    # Get the user by ID for user messages
+                    user = await session.execute(select(User).where(User.id == user_id))
+                    user = user.scalar_one_or_none()
+                    
+                    if not user:
+                        # Throw an error if the specified user_id doesn't exist
+                        raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+                    
+                    user_msg = Message(role="user", content=content, user_id=user.id)
                     session.add(user_msg)
                 # Transaction committed on exiting session.begin()
 
