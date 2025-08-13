@@ -34,7 +34,7 @@ export default function Home() {
     if (!user) return; // Don't proceed until we have user info
 
     // fetch initial messages
-    fetchMessages(setMessages);
+    fetchMessages(setMessages, user.id);
 
     // connect websocket
     connectWebsocketMemo();

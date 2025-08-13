@@ -50,10 +50,11 @@ export const fetchUser = async (
 };
 
 export const fetchMessages = async (
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+  userId: number
 ) => {
   if (!apiUrl) return;
-  const res = await fetch(`${apiUrl}/messages`, { cache: "no-store" });
+  const res = await fetch(`${apiUrl}/messages?user_id=${userId}`, { cache: "no-store" });
   const data: Message[] = await res.json();
   setMessages(data);
 };

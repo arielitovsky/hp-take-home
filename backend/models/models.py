@@ -10,5 +10,6 @@ class MessageRead(BaseModel):
     id: int
     role: str
     content: str
-    user_id: int
+    origin_user: int
+    destination_user: int
     created_at: str

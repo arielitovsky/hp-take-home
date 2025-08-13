@@ -9,6 +9,21 @@ from utils import generate_bot_reply
 import json
 import random
 
+
+async def get_bot_user(session: AsyncSession) -> User:
+    """Get the Bot user from the database"""
+    result = await session.execute(select(User).where(User.name == "Bot"))
+    return result.scalar_one()
+
+async def get_user_by_id(session: AsyncSession, user_id: int) -> User:
+    """Get the user by ID from the database"""
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one()
+    if not user:
+        # Throw an error if the specified user_id doesn't exist
+        raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+    return user
+
 seed_user_if_needed()
 
 app = FastAPI()
@@ -37,17 +52,27 @@ async def get_my_user():
 
 
 @app.get("/messages")
-async def get_messages():
+async def get_messages(user_id: int):
     async with AsyncSession(engine) as session:
         async with session.begin():
-            result = await session.execute(select(Message).order_by(Message.created_at.asc()))
+            
+            bot_user = await get_bot_user(session)
+            user = await get_user_by_id(session, user_id)
+            # Get messages where the user is either origin or destination, and the other party is the Bot
+            result = await session.execute(
+                select(Message).where(
+                    ((Message.origin_user == user_id) & (Message.destination_user == bot_user.id)) |
+                    ((Message.origin_user == bot_user.id) & (Message.destination_user == user_id))
+                ).order_by(Message.created_at.asc())
+            )
             messages = result.scalars().all()
             return [
                 MessageRead(
                     id=m.id,
                     role=m.role,
                     content=m.content,
-                    user_id=m.user_id,
+                    origin_user=m.origin_user,
+                    destination_user=m.destination_user,
                     created_at=m.created_at.isoformat() if hasattr(m.created_at, "isoformat") and m.created_at else "",
                 )
                 for m in messages
@@ -82,14 +107,12 @@ async def websocket_endpoint(websocket: WebSocket):
             async with AsyncSession(engine) as session:
                 async with session.begin():
                     # Get the user by ID for user messages
-                    user = await session.execute(select(User).where(User.id == user_id))
-                    user = user.scalar_one_or_none()
+                    user = await get_user_by_id(session, user_id)
+
+                    # Get the Bot user ID
+                    bot_user = await get_bot_user(session)
                     
-                    if not user:
-                        # Throw an error if the specified user_id doesn't exist
-                        raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
-                    
-                    user_msg = Message(role="user", content=content, user_id=user.id)
+                    user_msg = Message(role="user", content=content, origin_user=user.id, destination_user=bot_user.id)
                     session.add(user_msg)
                 # Transaction committed on exiting session.begin()
 
@@ -97,10 +120,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async with AsyncSession(engine) as session:
                 async with session.begin():
-                    # Get the Bot user for bot messages
-                    result = await session.execute(select(User).where(User.name == "Bot"))
-                    bot_user = result.scalar_one()
-                    bot_msg = Message(role="bot", content=bot_text, user_id=bot_user.id)
+                    user = await get_user_by_id(session, user_id)
+                    bot_user = await get_bot_user(session)
+                    bot_msg = Message(role="bot", content=bot_text, origin_user=bot_user.id, destination_user=user.id)
                     session.add(bot_msg)
                     
                     # Flush the INSERT statement to the database to get the auto-generated primary key (id)
@@ -116,7 +138,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "id": bot_msg.id,
                         "role": bot_msg.role,
                         "content": bot_msg.content,
-                        "user_id": bot_msg.user_id,
+                        "origin_user": bot_msg.origin_user,
+                        "destination_user": bot_msg.destination_user,
                         "created_at": bot_msg.created_at.isoformat() if hasattr(bot_msg.created_at, "isoformat") and bot_msg.created_at else "",
                     }
 

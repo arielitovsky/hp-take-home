@@ -13,8 +13,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     
-    # Relationship to messages
-    messages: Mapped[list["Message"]] = relationship(back_populates="user")
+    # Relationships to messages
+    sent_messages: Mapped[list["Message"]] = relationship("Message", foreign_keys="Message.origin_user", back_populates="origin_user_rel")
+    received_messages: Mapped[list["Message"]] = relationship("Message", foreign_keys="Message.destination_user", back_populates="destination_user_rel")
 
     def __repr__(self) -> str:
         return f"User(id={self.id!r}, name={self.name!r})"
@@ -26,8 +27,10 @@ class Message(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     role: Mapped[str] = mapped_column(String(10))  # 'user' or 'bot'
     content: Mapped[str] = mapped_column(Text())
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    origin_user: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    destination_user: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
-    # Relationship to user
-    user: Mapped[User] = relationship(back_populates="messages")
+    # Relationships to users
+    origin_user_rel: Mapped[User] = relationship("User", foreign_keys=[origin_user], back_populates="sent_messages")
+    destination_user_rel: Mapped[User] = relationship("User", foreign_keys=[destination_user], back_populates="received_messages")
