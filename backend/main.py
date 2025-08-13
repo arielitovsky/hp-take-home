@@ -5,7 +5,7 @@ from seed import seed_user_if_needed
 from sqlalchemy.ext.asyncio import AsyncSession
 from db_engine import engine
 from models import User, Message, UserRead, MessageRead
-import random
+from utils import generate_bot_reply
 
 seed_user_if_needed()
 
@@ -51,29 +51,7 @@ async def get_messages():
             ]
 
 
-def _generate_bot_reply() -> str:
-    words = [
-        "lorem",
-        "ipsum",
-        "dolor",
-        "sit",
-        "amet",
-        "consectetur",
-        "adipiscing",
-        "elit",
-        "sed",
-        "do",
-        "eiusmod",
-        "tempor",
-        "incididunt",
-        "ut",
-        "labore",
-        "et",
-        "dolore",
-        "magna",
-        "aliqua",
-    ]
-    return " ".join(random.choice(words) for _ in range(8)).capitalize() + "."
+
 
 
 @app.websocket("/ws")
@@ -91,7 +69,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     session.add(user_msg)
                 # Transaction committed on exiting session.begin()
 
-            bot_text = _generate_bot_reply()
+            bot_text = generate_bot_reply()
 
             async with AsyncSession(engine) as session:
                 async with session.begin():
