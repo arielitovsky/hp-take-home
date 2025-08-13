@@ -41,8 +41,8 @@ app.add_middleware(
 async def get_my_user():
     async with AsyncSession(engine) as session:
         async with session.begin():
-            # Randomly choose between Alice and Arie
-            random_name = random.choice(["Alice", "Arie"])
+            # Randomly choose between Alice and Zod
+            random_name = random.choice(["Alice", "Zod"])
             result = await session.execute(select(User).where(User.name == random_name))
             user = result.scalar_one()
 
