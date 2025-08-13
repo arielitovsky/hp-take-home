@@ -43,6 +43,7 @@ class MessageRead(BaseModel):
     id: int
     role: str
     content: str
+    user_id: int
     created_at: str
 
 
@@ -57,6 +58,7 @@ async def get_messages():
                     id=m.id,
                     role=m.role,
                     content=m.content,
+                    user_id=m.user_id,
                     created_at=m.created_at.isoformat() if hasattr(m.created_at, "isoformat") and m.created_at else "",
                 )
                 for m in messages
@@ -96,7 +98,10 @@ async def websocket_endpoint(websocket: WebSocket):
             text = await websocket.receive_text()
             async with AsyncSession(engine) as session:
                 async with session.begin():
-                    user_msg = Message(role="user", content=text)
+                    # Get the first user (Alice) for user messages
+                    user = await session.execute(select(User).where(User.name == "Alice"))
+                    user = user.scalar_one()
+                    user_msg = Message(role="user", content=text, user_id=user.id)
                     session.add(user_msg)
                 # Transaction committed on exiting session.begin()
 
@@ -104,7 +109,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async with AsyncSession(engine) as session:
                 async with session.begin():
-                    bot_msg = Message(role="bot", content=bot_text)
+                    # Get the Bot user for bot messages
+                    bot_user = await session.execute(select(User).where(User.name == "Bot"))
+                    bot_user = bot_user.scalar_one()
+                    bot_msg = Message(role="bot", content=bot_text, user_id=bot_user.id)
                     session.add(bot_msg)
                     # Ensure PK and server defaults (e.g., created_at) are loaded before session closes
                     await session.flush()
@@ -114,6 +122,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "id": bot_msg.id,
                         "role": bot_msg.role,
                         "content": bot_msg.content,
+                        "user_id": bot_msg.user_id,
                         "created_at": bot_msg.created_at.isoformat() if hasattr(bot_msg.created_at, "isoformat") and bot_msg.created_at else "",
                     }
 
